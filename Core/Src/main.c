@@ -299,6 +299,9 @@ void ESP_Response(char* buffer) {
  * I was receiving from the ESP-01 was inconsistent at best and seemed to be unstable. I measured the
  * voltage of the TX pin on the ESP when it was sending responses and it was either too low or fluctuated
  * quite a bit. Hoping I can fix it with a more stable power source.
+ *
+ * Also, will convert the USART functionality to DMA when everything is confirmed working for better
+ * optimization but I would rather focus first on getting the modules to work.
  */
 
 
