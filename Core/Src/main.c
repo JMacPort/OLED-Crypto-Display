@@ -1,31 +1,54 @@
 #include "main.h"
 #include <stdio.h>
 #include <stdarg.h>
+#include "font_5x7.h"
 
 // Prototypes
-void USART_Init();
-void USART_Print(const char* str, ...);
+void USART2_Init();
+void USART2_Print(const char*, ...);
 void I2C_Init();
 void OLED_Init();
+void OLED_WriteString(const char*);
+void OLED_Clear();
+void OLED_SetCursor(uint8_t, uint8_t);
+void USART1_Init();
+void ESP_Send_Command(const char*);
+void ESP_Response(char*);
 //void find_addr();
 
 // OLED
 #define OLED_ADDR					0x3C
-#define OLED_CMD					0x00
+
+char buffer[100];
 
 int main() {
-	USART_Init();
+	USART1_Init();
+	USART2_Init();
 	I2C_Init();
+	for (volatile int i = 0; i < 100000; i++);
 	OLED_Init();
 
-	for (volatile int i = 0; i < 60000; i++);
-
+	for (volatile int i = 0; i < 100000; i++);
+	OLED_Clear();
+	OLED_SetCursor(45, 0);
+	OLED_WriteString("BITCOIN");
+	OLED_SetCursor(30, 3);
+	OLED_WriteString("USD: $95,000");
+	OLED_SetCursor(49, 6);
+	OLED_WriteString("-6.3%");
+//
+//
+//	for (volatile int i = 0; i < 10000; i++);
+//	ESP_Send_Command("AT+UART_DEF=115200,8,1,0,0\r\n");
+//	ESP_Response(buffer);
+//
+//	USART2_Print(buffer);
 	while (1) {
 
 	}
 }
 
-void USART_Init() {
+void USART2_Init() {
 	RCC -> APB1ENR |= (1 << 17);										// USART2 Clock
 	RCC -> AHB1ENR |= (1 << 0);											// GPIOA Clock
 
@@ -34,11 +57,11 @@ void USART_Init() {
 
 	GPIOA -> AFR[0] |= (7 << (4 * 2)) | (7 << (4 * 3));					// AFR set to USART2
 
-	USART2 -> BRR = 0x0683;												// Baud Rate 9600
+	USART2 -> BRR = 0x683;												// Baud Rate 9600
 	USART2 -> CR1 |= (1 << 3) | (1 << 13);								// Transmit Enable; USART2 Enable
 }
 
-void USART_Print(const char* str, ...) {
+void USART2_Print(const char* str, ...) {
     char buffer[100];
 
     va_list args;
@@ -100,7 +123,7 @@ void I2C_SendAddress(uint8_t address, uint8_t read) {
 	uint32_t timeout = 10000;
 	while(!(I2C1->SR1 & (1 << 1)) && timeout) timeout--;  // Wait for ADDR with timeout
 	if(timeout == 0) {
-	   USART_Print("Address timeout\r\n");
+	   USART2_Print("Address timeout\r\n");
 	}
 
 	uint8_t dummyRead = I2C1 -> SR1;
@@ -131,49 +154,175 @@ void I2C_Write(uint8_t address, uint8_t data) {
 void OLED_Send_Command(uint8_t cmd) {
     I2C_Start();
     I2C_SendAddress(OLED_ADDR, 0);
-    I2C_SendData(OLED_CMD);
+    I2C_SendData(0x00);
     I2C_SendData(cmd);
     I2C_Stop();
 }
 
-void OLED_Init() {
-    // Turn display off first
+void OLED_Clear() {
     OLED_Send_Command(0xAE);    // Display off
 
-    // Power settings
-    OLED_Send_Command(0x8D);    // Charge pump setting
-    OLED_Send_Command(0x14);    // Enable charge pump
+    OLED_Send_Command(0x20);    // Set Memory Addressing Mode
+    OLED_Send_Command(0x00);    // Horizontal Addressing Mode
 
-    // Turn display on
+    OLED_Send_Command(0x21);    // Set Column Address
+    OLED_Send_Command(0x00);    // Start at column 0
+    OLED_Send_Command(0x7F);    // End at column 127
+
+    OLED_Send_Command(0x22);    // Set Page Address
+    OLED_Send_Command(0x00);    // Start at page 0
+    OLED_Send_Command(0x07);    // End at page 7
+
+    // Clear all pixels
+    for (uint16_t i = 0; i < 1024; i++) {
+        I2C_Start();
+        I2C_SendAddress(OLED_ADDR, 0);
+        I2C_SendData(0x40);     // Data mode
+        I2C_SendData(0x00);     // Clear pixel
+        I2C_Stop();
+    }
+
     OLED_Send_Command(0xAF);    // Display on
 }
 
+
+void OLED_Init() {
+    OLED_Send_Command(0xAE); // Display OFF
+
+    OLED_Send_Command(0x8D); // Enable Charge Pump
+    OLED_Send_Command(0x14);
+
+    OLED_Send_Command(0xA8); // Set Multiplex Ratio
+    OLED_Send_Command(0x3F); // 64 lines
+
+    OLED_Send_Command(0xD3); // Set Display Offset
+    OLED_Send_Command(0x00); // No offset
+
+    OLED_Send_Command(0x40); // Start line = 0
+
+    OLED_Send_Command(0xA1); // Segment re-map
+    OLED_Send_Command(0xC8); // COM scan direction
+
+    OLED_Send_Command(0xA6); // Normal Display (not inverted)
+
+    OLED_Send_Command(0xAF); // Display ON
+}
+
+void OLED_SetCursor(uint8_t col, uint8_t page) {
+    OLED_Send_Command(0x21);
+    OLED_Send_Command(col);
+    OLED_Send_Command(127);
+
+    OLED_Send_Command(0x22);
+    OLED_Send_Command(page);
+    OLED_Send_Command(7);
+}
+
+
+void OLED_WriteChar(char c) {
+    if (c < 32 || c > 127) c = 32;
+
+    const uint8_t* charData = font_5x7[c - 32];
+
+    for (int i = 0; i < 5; i++) {
+        I2C_Start();
+        I2C_SendAddress(OLED_ADDR, 0);
+        I2C_SendData(0x40);
+        I2C_SendData(charData[i]);
+        I2C_Stop();
+    }
+}
+
+void OLED_WriteString(const char* str) {
+    while (*str) {
+        OLED_WriteChar(*str++);
+    }
+}
+
+void USART1_Init() {
+    RCC -> APB2ENR |= (1 << 4);  									// USART1 Clock
+    RCC -> AHB1ENR |= (1 << 0);  									// GPIOA Clock
+
+    GPIOA -> MODER &= ~((3 << (2 * 9)) | (3 << (2 * 10)));			// PA9 & 10 to Alternate Function
+    GPIOA -> MODER |= (2 << (2 * 9)) | (2 << (2 * 10));
+
+    GPIOA -> AFR[1] &= ~((0xF << (1 * 4)) | (0xF << (2 * 4)));		// Set to AFR7
+    GPIOA -> AFR[1] |= (7 << (1 * 4)) | (7 << (2 * 4));
+
+    USART1->BRR = 0x460;  											// Baud rate 115200
+
+    USART1->CR1 = (1 << 13) | (1 << 3)  | (1 << 2);					// Enabled transmitter, receiver and USART1
+
+
+}
+
+// Sends a command from a string to the ESP-01 module
+void ESP_Send_Command(const char* cmd) {
+    USART2_Print("Sending: ");
+    while (*cmd) {
+        USART2_Print("0x%02X ", (unsigned char)*cmd);
+        while (!(USART1->SR & (1 << 7)));
+        USART1->DR = *cmd;
+        cmd++;
+    }
+    USART2_Print("\r\n");
+}
+
+// Gets the data register and returns a character
+char ESP_Get_Char() {
+	if(USART1 -> SR & (1 << 5)) {
+        char data = USART1->DR;
+        USART2_Print("Got byte: 0x%02X\r\n", (unsigned char)data);
+        return data;
+    }
+
+    USART2_Print("No data\r\n");
+    return 0;
+}
+
+// Strings together the response and stores in the buffer
+void ESP_Response(char* buffer) {
+    int i = 0;
+
+    for(int count = 0; count < 100; count++) {
+        buffer[i] = ESP_Get_Char();
+        if(buffer[i] == '\n') break;  // Exit on newline
+        i++;
+    }
+    buffer[i] = '\0';
+}
+
+/*
+ * Still very many bugs I need to deal with but I have ordered an external power breakout board so I
+ * no longer need to rely on the MCU to drive power. I think this was the same issue I had with the
+ * micro SD card modules. It arrives in a few days so I will be able to test better then, the output
+ * I was receiving from the ESP-01 was inconsistent at best and seemed to be unstable. I measured the
+ * voltage of the TX pin on the ESP when it was sending responses and it was either too low or fluctuated
+ * quite a bit. Hoping I can fix it with a more stable power source.
+ */
+
+
+
+
+
+
+
 //void find_addr() {
-//    USART_Print("Starting I2C scan...\r\n");
+//    USART2_Print("Starting I2C scan...\r\n");
 //
 //    for (int i = 0; i < 128; i++) {
 //        I2C_Start();
-//        USART_Print("Trying address: 0x%X\r\n", i);
+//        USART2_Print("Trying address: 0x%X\r\n", i);
 //
 //        I2C_SendAddress(i, 0);
 //
 //        if (!(I2C1->SR1 & (1 << 10))) {
-//            USART_Print("Found device at: 0x%X\r\n", i);
+//            USART2_Print("Found device at: 0x%X\r\n", i);
 //        }
 //
 //        I2C1->SR1 &= ~(1 << 10);
 //        I2C_Stop();
 //    }
 //
-//    USART_Print("Scan complete\r\n");
+//    USART2_Print("Scan complete\r\n");
 //}
-
-
-
-
-
-
-
-
-
-
