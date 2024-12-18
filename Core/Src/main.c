@@ -24,25 +24,25 @@ char buffer[100];
 int main() {
 	USART1_Init();
 	USART2_Init();
-	I2C_Init();
-	for (volatile int i = 0; i < 100000; i++);
-	OLED_Init();
+//	I2C_Init();
+//	for (volatile int i = 0; i < 100000; i++);
+//	OLED_Init();
+//
+//	for (volatile int i = 0; i < 100000; i++);
+//	OLED_Clear();
+//	OLED_SetCursor(45, 0);
+//	OLED_WriteString("BITCOIN");
+//	OLED_SetCursor(30, 3);
+//	OLED_WriteString("USD: $95,000");
+//	OLED_SetCursor(49, 6);
+//	OLED_WriteString("-6.3%");
 
-	for (volatile int i = 0; i < 100000; i++);
-	OLED_Clear();
-	OLED_SetCursor(45, 0);
-	OLED_WriteString("BITCOIN");
-	OLED_SetCursor(30, 3);
-	OLED_WriteString("USD: $95,000");
-	OLED_SetCursor(49, 6);
-	OLED_WriteString("-6.3%");
-//
-//
-//	for (volatile int i = 0; i < 10000; i++);
-//	ESP_Send_Command("AT+UART_DEF=115200,8,1,0,0\r\n");
-//	ESP_Response(buffer);
-//
-//	USART2_Print(buffer);
+
+	for (volatile int i = 0; i < 10000; i++);
+	ESP_Send_Command("AT+UART_DEF=115200,8,1,0,0\r\n");
+	ESP_Response(buffer);
+
+	USART2_Print(buffer);
 	while (1) {
 
 	}
@@ -57,7 +57,7 @@ void USART2_Init() {
 
 	GPIOA -> AFR[0] |= (7 << (4 * 2)) | (7 << (4 * 3));					// AFR set to USART2
 
-	USART2 -> BRR = 0x683;												// Baud Rate 9600
+	USART2 -> BRR = 0x460;												// Baud Rate 9600
 	USART2 -> CR1 |= (1 << 3) | (1 << 13);								// Transmit Enable; USART2 Enable
 }
 
@@ -249,11 +249,9 @@ void USART1_Init() {
     GPIOA -> AFR[1] &= ~((0xF << (1 * 4)) | (0xF << (2 * 4)));		// Set to AFR7
     GPIOA -> AFR[1] |= (7 << (1 * 4)) | (7 << (2 * 4));
 
-    USART1->BRR = 0x460;  											// Baud rate 115200
+    USART1 -> BRR = 0x460;  											// Baud rate 115200
 
-    USART1->CR1 = (1 << 13) | (1 << 3)  | (1 << 2);					// Enabled transmitter, receiver and USART1
-
-
+    USART1 -> CR1 = (1 << 13) | (1 << 3)  | (1 << 2);					// Enabled transmitter, receiver and USART1
 }
 
 // Sends a command from a string to the ESP-01 module
@@ -272,7 +270,7 @@ void ESP_Send_Command(const char* cmd) {
 char ESP_Get_Char() {
 	if(USART1 -> SR & (1 << 5)) {
         char data = USART1->DR;
-        USART2_Print("Got byte: 0x%02X\r\n", (unsigned char)data);
+        USART2_Print("Got byte: %c\r\n", (unsigned char)data);
         return data;
     }
 
@@ -302,13 +300,14 @@ void ESP_Response(char* buffer) {
  *
  * Also, will convert the USART functionality to DMA when everything is confirmed working for better
  * optimization but I would rather focus first on getting the modules to work.
+ *
+ * Update 12/17: I am lost. Even with a new external power module, I at best, can only get the module to
+ * echo back. Zero internet connectivity was established and I have reverted the code to its original standing.
+ * This is pretty frustrating so I will probably change this project to send data over Bluetooth to a Python
+ * client and then return responses that way. Unsure of what I am doing wrong here as there were many variations
+ * of error checking and code watching. The module was getting properly powered and activated but it was not sending
+ * the proper responses.
  */
-
-
-
-
-
-
 
 //void find_addr() {
 //    USART2_Print("Starting I2C scan...\r\n");
