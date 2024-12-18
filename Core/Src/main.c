@@ -24,25 +24,19 @@ char buffer[100];
 int main() {
 	USART1_Init();
 	USART2_Init();
-//	I2C_Init();
-//	for (volatile int i = 0; i < 100000; i++);
-//	OLED_Init();
-//
-//	for (volatile int i = 0; i < 100000; i++);
-//	OLED_Clear();
-//	OLED_SetCursor(45, 0);
-//	OLED_WriteString("BITCOIN");
-//	OLED_SetCursor(30, 3);
-//	OLED_WriteString("USD: $95,000");
-//	OLED_SetCursor(49, 6);
-//	OLED_WriteString("-6.3%");
+	I2C_Init();
+	for (volatile int i = 0; i < 100000; i++);
+	OLED_Init();
 
+	for (volatile int i = 0; i < 100000; i++);
+	OLED_Clear();
+	OLED_SetCursor(45, 0);
+	OLED_WriteString("BITCOIN");
+	OLED_SetCursor(30, 3);
+	OLED_WriteString("USD: $95,000");
+	OLED_SetCursor(49, 6);
+	OLED_WriteString("-6.3%");
 
-	for (volatile int i = 0; i < 10000; i++);
-	ESP_Send_Command("AT+UART_DEF=115200,8,1,0,0\r\n");
-	ESP_Response(buffer);
-
-	USART2_Print(buffer);
 	while (1) {
 
 	}
@@ -291,22 +285,17 @@ void ESP_Response(char* buffer) {
 }
 
 /*
- * Still very many bugs I need to deal with but I have ordered an external power breakout board so I
- * no longer need to rely on the MCU to drive power. I think this was the same issue I had with the
- * micro SD card modules. It arrives in a few days so I will be able to test better then, the output
- * I was receiving from the ESP-01 was inconsistent at best and seemed to be unstable. I measured the
- * voltage of the TX pin on the ESP when it was sending responses and it was either too low or fluctuated
- * quite a bit. Hoping I can fix it with a more stable power source.
- *
- * Also, will convert the USART functionality to DMA when everything is confirmed working for better
- * optimization but I would rather focus first on getting the modules to work.
- *
- * Update 12/17: I am lost. Even with a new external power module, I at best, can only get the module to
+ *Update 12/17: I am lost. Even with a new external power module, I at best, can only get the module to
  * echo back. Zero internet connectivity was established and I have reverted the code to its original standing.
- * This is pretty frustrating so I will probably change this project to send data over Bluetooth to a Python
- * client and then return responses that way. Unsure of what I am doing wrong here as there were many variations
- * of error checking and code watching. The module was getting properly powered and activated but it was not sending
- * the proper responses.
+ * Okay seems like it can't output enough mA, going to order an ESP-01S adapter module to try that out which
+ * should fix the issue.
+ *
+ * Update 12/18: For now I will change the project to use Bluetooth to connect to either an Arduino or my PC. The goal will
+ * be to send commands via the external module like "BTC" and then this will hit an API to return the statistics
+ * of the specific coin. I could also set up buttons so that a current list of coins can be saved to cycle through
+ * by just using the module. The STM32 will just be used to receive external outputs and then display onto the OLED so it
+ * will interrupt when a receive is detected and then update the display properly. Will have to figure out a better way to
+ * clear the screen or at best update it more efficiently.
  */
 
 //void find_addr() {
