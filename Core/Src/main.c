@@ -249,7 +249,7 @@ void USART1_Init() {
     GPIOA -> AFR[1] &= ~((0xF << (1 * 4)) | (0xF << (2 * 4)));		// Set to AFR7
     GPIOA -> AFR[1] |= (7 << (1 * 4)) | (7 << (2 * 4));
 
-    USART1 -> BRR = 0x460;  											// Baud rate 115200
+    USART1 -> BRR = 0x031D;  											// Baud rate 115200
 
     USART1 -> CR1 = (1 << 13) | (1 << 3)  | (1 << 2);					// Enabled transmitter, receiver and USART1
 }
