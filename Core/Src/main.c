@@ -265,6 +265,7 @@ void USART1_Init() {
     USART1 -> CR1 = (1 << 13) | (1 << 3)  | (1 << 2);					// Enabled transmitter, receiver and USART1
 }
 
+// Sends an AT command over USART1 to the ESP32
 void Wifi_Send_Command(const char* str) {
 	while (*str) {
 		while (!(USART1->SR & (1<<7)));
@@ -273,34 +274,32 @@ void Wifi_Send_Command(const char* str) {
 	}
 }
 
+// Retrieves a character from USART1 data register
 char Wifi_Get_Char() {
-    // Wait for data with timeout
     uint32_t timeout = 10000;
-    while(!(USART1->SR & (1 << 5)) && timeout) {  // Check RXNE flag
+    while(!(USART1->SR & (1 << 5)) && timeout) {
         timeout--;
     }
 
-    if(timeout == 0) return 0;  // No data received
+    if(timeout == 0) return 0;
 
-    return USART1->DR;  // Return received data
+    return USART1->DR;
 }
 
+// Stores characters in a buffer. Timeout is gives a delay to start the function and data count is used to make sure data is being retrieved
 void Wifi_Read_Response_With_Timeout(uint32_t timeout) {
     char c;
     uint8_t index = 0;
     uint8_t no_data_count = 0;
 
-    // Clear buffer
     memset(buffer, 0, MAX_BUFFER);
 
-    // Initial delay
     for(volatile int i = 0; i < timeout; i++);
 
-    // Look for the IPD indicator first
     while(no_data_count < 50) {
         c = Wifi_Get_Char();
         if(c != 0) {
-            USART2_Print("%c", c);  // Echo each character for debug
+            USART2_Print("%c", c);
 
             buffer[index] = c;
             if(index >= MAX_BUFFER - 2) break;
@@ -308,47 +307,43 @@ void Wifi_Read_Response_With_Timeout(uint32_t timeout) {
             no_data_count = 0;
         } else {
             no_data_count++;
-            // Small delay between retries
             for(volatile int i = 0; i < 1000; i++);
         }
     }
-
     buffer[index] = '\0';
 }
 
+// I have to figure out the issues with SSL but currently this connects to httpbin and gets a response with a GET request
 void Wifi_Init() {
     USART2_Print("Starting HTTP Test\r\n");
 
-    // Enable multiple connections
+
     Wifi_Send_Command("AT+CIPMUX=1\r\n");
     Wifi_Read_Response_With_Timeout(1000);
 
-    // Connect to server
+
     USART2_Print("Connecting to server...\r\n");
     Wifi_Send_Command("AT+CIPSTART=0,\"TCP\",\"httpbin.org\",80\r\n");
     Wifi_Read_Response_With_Timeout(10000);
 
-    // Prepare and send HTTP request
     const char *httpRequest = "GET /get HTTP/1.0\r\n"
                              "Host: httpbin.org\r\n"
                              "Connection: close\r\n\r\n";
 
-    // Send length command
     char sendCmd[32];
     sprintf(sendCmd, "AT+CIPSEND=0,%d\r\n", strlen(httpRequest));
 
     Wifi_Send_Command(sendCmd);
     Wifi_Read_Response_With_Timeout(1000);
 
-    // Send the HTTP request
     USART2_Print("Sending request...\r\n");
     Wifi_Send_Command(httpRequest);
 
-    // Read response
     USART2_Print("\r\nResponse:\r\n");
     Wifi_Read_Response_With_Timeout(10000);
     USART2_Print("%s\r\n", buffer);
 }
+
 /*
  * Got an ESP32 to work in AT mode so that is what I will use for the wifi connectivity of this project.
  */
