@@ -1,6 +1,7 @@
 #include "main.h"
 #include <stdio.h>
 #include <stdarg.h>
+#include <string.h>
 #include "font_5x7.h"
 
 // Prototypes
@@ -14,34 +15,42 @@ void OLED_SetCursor(uint8_t, uint8_t);
 void USART1_Init();
 void ESP_Send_Command(const char*);
 void ESP_Response(char*);
+char Wifi_Get_Char();
+void Wifi_Read_Response_With_Timeout();
+void Wifi_Send_Command(const char*);
+void Wifi_Init();
 //void find_addr();
 
 // OLED
 #define OLED_ADDR					0x3C
 
-char buffer[100];
+#define MAX_BUFFER					1000
+
+char buffer[MAX_BUFFER];
 
 int main() {
 	USART1_Init();
 	USART2_Init();
 	I2C_Init();
 
-	// Change to timer based so setup time is constant
-	for (volatile int i = 0; i < 100000; i++);
-	OLED_Init();
+//	// Change to timer based so setup time is constant
+//	for (volatile int i = 0; i < 100000; i++);
+	USART2_Print("Ready....\r\n");
+	Wifi_Init();
+//	OLED_Init();
+//
+//	for (volatile int i = 0; i < 100000; i++);
+//	// Move to receive interrupt
+//	OLED_Clear();
+//	OLED_SetCursor(45, 0);
+//	OLED_WriteString("BITCOIN");
+//	OLED_SetCursor(30, 3);
+//	OLED_WriteString("USD: $95,000");
+//	OLED_SetCursor(49, 6);
+//	OLED_WriteString("-6.3%");
 
-	for (volatile int i = 0; i < 100000; i++);
-	// Move to receive interrupt
-	OLED_Clear();
-	OLED_SetCursor(45, 0);
-	OLED_WriteString("BITCOIN");
-	OLED_SetCursor(30, 3);
-	OLED_WriteString("USD: $95,000");
-	OLED_SetCursor(49, 6);
-	OLED_WriteString("-6.3%");
 
 	while (1) {
-
 	}
 }
 
@@ -55,7 +64,7 @@ void USART2_Init() {
 
 	GPIOA -> AFR[0] |= (7 << (4 * 2)) | (7 << (4 * 3));					// AFR set to USART2
 
-	USART2 -> BRR = 0x460;												// Baud Rate 9600
+	USART2 -> BRR = 16000000 / 115200;									// Baud Rate 115200
 	USART2 -> CR1 |= (1 << 3) | (1 << 13);								// Transmit Enable; USART2 Enable
 }
 
@@ -251,19 +260,97 @@ void USART1_Init() {
     GPIOA -> AFR[1] &= ~((0xF << (1 * 4)) | (0xF << (2 * 4)));			// Set to AFR7
     GPIOA -> AFR[1] |= (7 << (1 * 4)) | (7 << (2 * 4));
 
-    USART1 -> BRR = 0x683;  											// Baud rate 9600
+    USART1 -> BRR = 16000000 / 115200;  								// Baud rate 115200
 
     USART1 -> CR1 = (1 << 13) | (1 << 3)  | (1 << 2);					// Enabled transmitter, receiver and USART1
 }
 
+void Wifi_Send_Command(const char* str) {
+	while (*str) {
+		while (!(USART1->SR & (1<<7)));
+		USART1 -> DR = *str;
+		str++;
+	}
+}
 
+char Wifi_Get_Char() {
+    // Wait for data with timeout
+    uint32_t timeout = 10000;
+    while(!(USART1->SR & (1 << 5)) && timeout) {  // Check RXNE flag
+        timeout--;
+    }
+
+    if(timeout == 0) return 0;  // No data received
+
+    return USART1->DR;  // Return received data
+}
+
+void Wifi_Read_Response_With_Timeout(uint32_t timeout) {
+    char c;
+    uint8_t index = 0;
+    uint8_t no_data_count = 0;
+
+    // Clear buffer
+    memset(buffer, 0, MAX_BUFFER);
+
+    // Initial delay
+    for(volatile int i = 0; i < timeout; i++);
+
+    // Look for the IPD indicator first
+    while(no_data_count < 50) {
+        c = Wifi_Get_Char();
+        if(c != 0) {
+            USART2_Print("%c", c);  // Echo each character for debug
+
+            buffer[index] = c;
+            if(index >= MAX_BUFFER - 2) break;
+            index++;
+            no_data_count = 0;
+        } else {
+            no_data_count++;
+            // Small delay between retries
+            for(volatile int i = 0; i < 1000; i++);
+        }
+    }
+
+    buffer[index] = '\0';
+}
+
+void Wifi_Init() {
+    USART2_Print("Starting HTTP Test\r\n");
+
+    // Enable multiple connections
+    Wifi_Send_Command("AT+CIPMUX=1\r\n");
+    Wifi_Read_Response_With_Timeout(1000);
+
+    // Connect to server
+    USART2_Print("Connecting to server...\r\n");
+    Wifi_Send_Command("AT+CIPSTART=0,\"TCP\",\"httpbin.org\",80\r\n");
+    Wifi_Read_Response_With_Timeout(10000);
+
+    // Prepare and send HTTP request
+    const char *httpRequest = "GET /get HTTP/1.0\r\n"
+                             "Host: httpbin.org\r\n"
+                             "Connection: close\r\n\r\n";
+
+    // Send length command
+    char sendCmd[32];
+    sprintf(sendCmd, "AT+CIPSEND=0,%d\r\n", strlen(httpRequest));
+
+    Wifi_Send_Command(sendCmd);
+    Wifi_Read_Response_With_Timeout(1000);
+
+    // Send the HTTP request
+    USART2_Print("Sending request...\r\n");
+    Wifi_Send_Command(httpRequest);
+
+    // Read response
+    USART2_Print("\r\nResponse:\r\n");
+    Wifi_Read_Response_With_Timeout(10000);
+    USART2_Print("%s\r\n", buffer);
+}
 /*
- * Update 12/18: For now I will change the project to use Bluetooth to connect to either an Arduino or my PC. The goal will
- * be to send commands via the external module like "BTC" and then this will hit an API to return the statistics
- * of the specific coin. I could also set up buttons so that a current list of coins can be saved to cycle through
- * by just using the module. The STM32 will just be used to receive external outputs and then display onto the OLED so it
- * will interrupt when a receive is detected and then update the display properly. Will have to figure out a better way to
- * clear the screen or at best update it more efficiently.
+ * Got an ESP32 to work in AT mode so that is what I will use for the wifi connectivity of this project.
  */
 
 
