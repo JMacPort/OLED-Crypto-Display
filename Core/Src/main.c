@@ -18,13 +18,13 @@ void ESP_Response(char*);
 char Wifi_Get_Char();
 void Wifi_Read_Response_With_Timeout();
 void Wifi_Send_Command(const char*);
-void Wifi_Init();
+void Wifi_HTTPS_GET();
 //void find_addr();
 
 // OLED
 #define OLED_ADDR					0x3C
 
-#define MAX_BUFFER					1000
+#define MAX_BUFFER					500
 
 char buffer[MAX_BUFFER];
 
@@ -36,7 +36,7 @@ int main() {
 //	// Change to timer based so setup time is constant
 //	for (volatile int i = 0; i < 100000; i++);
 	USART2_Print("Ready....\r\n");
-	Wifi_Init();
+	Wifi_HTTPS_GET();;
 //	OLED_Init();
 //
 //	for (volatile int i = 0; i < 100000; i++);
@@ -299,8 +299,7 @@ void Wifi_Read_Response_With_Timeout(uint32_t timeout) {
     while(no_data_count < 50) {
         c = Wifi_Get_Char();
         if(c != 0) {
-            USART2_Print("%c", c);
-
+            // Store in buffer without printing
             buffer[index] = c;
             if(index >= MAX_BUFFER - 2) break;
             index++;
@@ -311,37 +310,56 @@ void Wifi_Read_Response_With_Timeout(uint32_t timeout) {
         }
     }
     buffer[index] = '\0';
+
+    char *price_start = strstr(buffer, "\"USD\":");
+        if(price_start) {
+            char price_str[32];
+            price_start += 6;
+            int i = 0;
+            while(price_start[i] != '}' && i < 31) {
+                price_str[i] = price_start[i];
+                i++;
+            }
+            price_str[i] = '\0';
+
+            sprintf(buffer, "BTC: $%s", price_str);
+            USART2_Print("Price for OLED: %s\r\n", buffer);
+        }
 }
 
-// I have to figure out the issues with SSL but currently this connects to httpbin and gets a response with a GET request
-void Wifi_Init() {
-    USART2_Print("Starting HTTP Test\r\n");
+void Wifi_HTTPS_GET() {
+    USART2_Print("Starting SSL Connection\r\n");
 
+    Wifi_Send_Command("ATE0\r\n");
+    Wifi_Read_Response_With_Timeout(1000);
 
     Wifi_Send_Command("AT+CIPMUX=1\r\n");
     Wifi_Read_Response_With_Timeout(1000);
 
+    Wifi_Send_Command("AT+CIPSTART=0,\"SSL\",\"min-api.cryptocompare.com\",443,2\r\n");
+    Wifi_Read_Response_With_Timeout(7500);
 
-    USART2_Print("Connecting to server...\r\n");
-    Wifi_Send_Command("AT+CIPSTART=0,\"TCP\",\"httpbin.org\",80\r\n");
-    Wifi_Read_Response_With_Timeout(10000);
+    Wifi_Send_Command("AT+CIPSTART=0,\"SSL\",\"min-api.cryptocompare.com\",443,2\r\n");
+    Wifi_Read_Response_With_Timeout(7500);
 
-    const char *httpRequest = "GET /get HTTP/1.0\r\n"
-                             "Host: httpbin.org\r\n"
-                             "Connection: close\r\n\r\n";
+    const char *getRequest = "GET /data/price?fsym=BTC&tsyms=USD HTTP/1.1\r\n"
+                            "Host: min-api.cryptocompare.com\r\n"
+                            "Connection: close\r\n"
+                            "User-Agent: ESP32/1.0\r\n"
+                            "\r\n";
 
+    USART2_Print("GET request length: %d\r\n", strlen(getRequest));
     char sendCmd[32];
-    sprintf(sendCmd, "AT+CIPSEND=0,%d\r\n", strlen(httpRequest));
+    sprintf(sendCmd, "AT+CIPSEND=0,%d\r\n", strlen(getRequest));
 
     Wifi_Send_Command(sendCmd);
-    Wifi_Read_Response_With_Timeout(1000);
+    Wifi_Read_Response_With_Timeout(3000);
 
-    USART2_Print("Sending request...\r\n");
-    Wifi_Send_Command(httpRequest);
+    USART2_Print("Sending GET request...\r\n");
+    Wifi_Send_Command(getRequest);
+    Wifi_Read_Response_With_Timeout(12000);
 
-    USART2_Print("\r\nResponse:\r\n");
-    Wifi_Read_Response_With_Timeout(10000);
-    USART2_Print("%s\r\n", buffer);
+    USART2_Print("\r\nRequest completed\r\n");
 }
 
 /*
