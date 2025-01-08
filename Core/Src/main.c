@@ -286,7 +286,7 @@ char Wifi_Get_Char() {
     return USART1->DR;
 }
 
-// Stores characters in a buffer. Timeout is gives a delay to start the function and data count is used to make sure data is being retrieved
+// Stores characters in a buffer which is parsed and then only contains the coin price.
 void Wifi_Read_Response_With_Timeout(uint32_t timeout) {
     char c;
     uint8_t index = 0;
