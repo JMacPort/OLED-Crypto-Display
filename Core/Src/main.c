@@ -33,28 +33,13 @@ int main() {
 	USART2_Init();
 	I2C_Init();
 
-//	// Change to timer based so setup time is constant
-//	for (volatile int i = 0; i < 100000; i++);
 	USART2_Print("Ready....\r\n");
 	Wifi_HTTPS_GET();;
-//	OLED_Init();
-//
-//	for (volatile int i = 0; i < 100000; i++);
-//	// Move to receive interrupt
-//	OLED_Clear();
-//	OLED_SetCursor(45, 0);
-//	OLED_WriteString("BITCOIN");
-//	OLED_SetCursor(30, 3);
-//	OLED_WriteString("USD: $95,000");
-//	OLED_SetCursor(49, 6);
-//	OLED_WriteString("-6.3%");
-
 
 	while (1) {
 	}
 }
 
-// From here ->
 void USART2_Init() {
 	RCC -> APB1ENR |= (1 << 17);										// USART2 Clock
 	RCC -> AHB1ENR |= (1 << 0);											// GPIOA Clock
@@ -165,7 +150,6 @@ void OLED_Send_Command(uint8_t cmd) {
     I2C_SendData(cmd);
     I2C_Stop();
 }
-// -> Here is fine and does not need to be
 
 
 // Possibly can optimize this a bit more to expand functionality to only clear used rows?
@@ -194,7 +178,6 @@ void OLED_Clear() {
     OLED_Send_Command(0xAF);    // Display on
 }
 
-// Should be fine, not doing any extensive work so not worried about this
 void OLED_Init() {
     OLED_Send_Command(0xAE); // Display OFF
 
@@ -217,7 +200,6 @@ void OLED_Init() {
     OLED_Send_Command(0xAF); // Display ON
 }
 
-// Fine as well
 void OLED_SetCursor(uint8_t col, uint8_t page) {
     OLED_Send_Command(0x21);
     OLED_Send_Command(col);
@@ -287,6 +269,7 @@ char Wifi_Get_Char() {
 }
 
 // Stores characters in a buffer which is parsed and then only contains the coin price.
+// More error checking will be added to stop/restart if errors or non-ok responses are given.
 void Wifi_Read_Response_With_Timeout(uint32_t timeout) {
     char c;
     uint8_t index = 0;
@@ -299,7 +282,6 @@ void Wifi_Read_Response_With_Timeout(uint32_t timeout) {
     while(no_data_count < 50) {
         c = Wifi_Get_Char();
         if(c != 0) {
-            // Store in buffer without printing
             buffer[index] = c;
             if(index >= MAX_BUFFER - 2) break;
             index++;
@@ -327,6 +309,8 @@ void Wifi_Read_Response_With_Timeout(uint32_t timeout) {
         }
 }
 
+// Will be changed to accept parameters but currently works as stands. Responses are sent to the buffer.
+// Needed two CIPSTART calls for SSL connections to properly work.
 void Wifi_HTTPS_GET() {
     USART2_Print("Starting SSL Connection\r\n");
 
@@ -366,15 +350,6 @@ void Wifi_HTTPS_GET() {
  * Got an ESP32 to work in AT mode so that is what I will use for the wifi connectivity of this project.
  */
 
-
-/*
- * Next Steps:
- * - Write/Read functionality for USART1/Bluetooth
- * - Connect Bluetooth module to open COM port.
- * - Create interrupts to recieve and send data to py script
- * - Data sent will be to refresh current price, change coin or swap screen output
- * - Data received will be used to write to OLED in predefined spots. ie. col = 5, page = 10;
- */
 
 //void find_addr() {
 //    USART2_Print("Starting I2C scan...\r\n");
