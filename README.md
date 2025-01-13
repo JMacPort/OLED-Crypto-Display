@@ -80,6 +80,9 @@ All peripherals are configured directly through registers:
 - Timer setup
 - Interrupt configuration
 
+## Demo
+
+![Full Setup](/images/Full_Setup.jpeg)
 
 ## Notes
 This project is implemented without relying on HAL or other middleware, demonstrating direct register manipulation and bare metal programming concepts.
