@@ -19,6 +19,7 @@ char Wifi_Get_Char();
 void Wifi_Read_Response_With_Timeout();
 void Wifi_Send_Command(const char*);
 void Wifi_HTTPS_GET();
+void Timer2_Init();
 //void find_addr();
 
 // OLED
@@ -30,11 +31,16 @@ char buffer[MAX_BUFFER];
 
 int main() {
 	USART1_Init();
+
 	USART2_Init();
+	USART2_Print("Ready....\r\n");
+
 	I2C_Init();
 
-	USART2_Print("Ready....\r\n");
-	Wifi_HTTPS_GET();;
+	OLED_Init();
+	Timer2_Init();
+
+
 
 	while (1) {
 	}
@@ -198,6 +204,8 @@ void OLED_Init() {
     OLED_Send_Command(0xA6); // Normal Display (not inverted)
 
     OLED_Send_Command(0xAF); // Display ON
+
+    OLED_Clear();
 }
 
 void OLED_SetCursor(uint8_t col, uint8_t page) {
@@ -210,7 +218,7 @@ void OLED_SetCursor(uint8_t col, uint8_t page) {
     OLED_Send_Command(7);
 }
 
-// Displays one character from the bitmap, should be fine
+// Displays one character from the bitmap
 void OLED_WriteChar(char c) {
     if (c < 32 || c > 127) c = 32;
 
@@ -225,7 +233,7 @@ void OLED_WriteChar(char c) {
     }
 }
 
-// Displays a string on OLED, should also be fine
+// Displays a string on OLED
 void OLED_WriteString(const char* str) {
     while (*str) {
         OLED_WriteChar(*str++);
@@ -294,19 +302,21 @@ void Wifi_Read_Response_With_Timeout(uint32_t timeout) {
     buffer[index] = '\0';
 
     char *price_start = strstr(buffer, "\"USD\":");
-        if(price_start) {
-            char price_str[32];
-            price_start += 6;
-            int i = 0;
-            while(price_start[i] != '}' && i < 31) {
-                price_str[i] = price_start[i];
-                i++;
-            }
-            price_str[i] = '\0';
-
-            sprintf(buffer, "BTC: $%s", price_str);
-            USART2_Print("Price for OLED: %s\r\n", buffer);
+    if(price_start) {
+        char price_str[32];
+        price_start += 6;
+        int i = 0;
+        while(price_start[i] != '}' && i < 31) {
+            price_str[i] = price_start[i];
+            i++;
         }
+        price_str[i] = '\0';
+
+        sprintf(buffer, "BTC: $%s", price_str);
+        USART2_Print("Price for OLED: %s\r\n", buffer);
+    } else {
+        sprintf(buffer, "Error: Cannot retrieve price");
+    }
 }
 
 // Will be changed to accept parameters but currently works as stands. Responses are sent to the buffer.
@@ -346,10 +356,33 @@ void Wifi_HTTPS_GET() {
     USART2_Print("\r\nRequest completed\r\n");
 }
 
-/*
- * Got an ESP32 to work in AT mode so that is what I will use for the wifi connectivity of this project.
- */
+// 30 Second Interval Interrupt
+void Timer2_Init() {
+	RCC -> APB1ENR |= (1 << 0);
+	RCC -> APB2ENR |= (1 << 14);
 
+	TIM2 -> PSC |= 15999;
+	TIM2 -> ARR = 1999;
+	TIM2 -> DIER |= (1 << 0);
+
+	NVIC -> ISER[0] |= (1 << 28);
+
+	TIM2 -> CR1 |= (1 << 0);
+}
+
+void TIM2_IRQHandler() {
+	if (TIM2 -> SR & (1 << 0)) {
+		USART2_Print("Timer Interrupt....\r\n");
+		OLED_SetCursor(0, 0);
+		Wifi_HTTPS_GET();
+		OLED_WriteString(buffer);
+		OLED_SetCursor(30, 3);
+		OLED_WriteString("Looks Good!");
+		TIM2 -> ARR = 29999;
+	}
+
+	TIM2 -> SR &= ~(1 << 0);
+}
 
 //void find_addr() {
 //    USART2_Print("Starting I2C scan...\r\n");
